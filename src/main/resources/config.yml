@@ -1,0 +1,37 @@
+tracker:
+  cooldown-seconds: 7
+  duration-seconds: 0
+  alert-runner: true
+  runner-alert-message: "&c&lTRACKED"
+  cooldown-message: "&cTracker recharging... &7{time}s remaining"
+  tracking-message: "&aTracking &e{runner}&a..."
+  
+game:
+  auto-give-compass: true
+  announce-start: true
+  announce-end: true
+  freeze-on-end: true
+  hunter-can-damage-dragon: false
+  hunter-freeze-delay: "wait-for-move"
+  
+messages:
+  prefix: "&8[&6Manhunt&8] &7"
+  game-started: "&aGame started! &7Hunters: &e{hunters} &7| Runners: &e{runners}"
+  game-stopped: "&cGame stopped by GameMaster"
+  game-paused: "&eGame paused"
+  game-resumed: "&aGame resumed"
+  runner-win: "&a&lRUNNER WINS! &7The Ender Dragon has been slain!"
+  hunter-win: "&c&lHUNTERS WIN! &7All runners have been eliminated!"
+  player-added-hunter: "&e{player} &7added as &cHunter"
+  player-added-runner: "&e{player} &7added as &aRunner"
+  player-removed: "&e{player} &7removed from the game"
+  no-active-game: "&cNo active game session"
+  already-in-game: "&cGame already in progress"
+  not-enough-players: "&cNeed at least 1 hunter and 1 runner"
+  dimension-tracking: "&7Runner is in &e{dimension}&7, pointing to last portal"
+  
+sounds:
+  tracking: "BLOCK_NOTE_BLOCK_PLING"
+  tracked: "ENTITY_ENDERMAN_TELEPORT"
+  game-start: "ENTITY_ENDER_DRAGON_GROWL"
+  game-end: "UI_TOAST_CHALLENGE_COMPLETE"
