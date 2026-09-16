@@ -22,7 +22,6 @@ public class ConfigManager {
     private final boolean freezeOnEnd;
     private final String prefix;
     private final boolean hunterCanDamageDragon;
-    private final String hunterFreezeDelay;
     
     public ConfigManager(ManhuntPlugin plugin) {
         this.plugin = plugin;
@@ -39,7 +38,6 @@ public class ConfigManager {
         this.announceEnd = config.getBoolean("game.announce-end", true);
         this.freezeOnEnd = config.getBoolean("game.freeze-on-end", true);
         this.hunterCanDamageDragon = config.getBoolean("game.hunter-can-damage-dragon", false);
-        this.hunterFreezeDelay = config.getString("game.hunter-freeze-delay", "wait-for-move");
         this.prefix = config.getString("messages.prefix", "&8[&6Manhunt&8] &7");
     }
     
@@ -51,18 +49,15 @@ public class ConfigManager {
         return config.getString("sounds." + path, "");
     }
     
-    public String getHunterFreezeDelayDisplay() {
-        switch (hunterFreezeDelay.toLowerCase()) {
-            case "none":
-                return "None";
-            case "wait-for-move":
-                return "Wait for Move";
-            case "5":
-                return "5 seconds";
-            case "10":
-                return "10 seconds";
-            default:
-                return "Wait for Move";
-        }
+    public int getRunnerGracePeriodSeconds() {
+        return Math.max(0, config.getInt("game.runner-grace-period-seconds", 5));
+    }
+
+    public int getHunterLives() {
+        return Math.max(1, config.getInt("game.hunter-lives", 3));
+    }
+
+    public int getRunnerLives() {
+        return Math.max(1, config.getInt("game.runner-lives", 3));
     }
 }

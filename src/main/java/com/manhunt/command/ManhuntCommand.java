@@ -26,6 +26,11 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("ready")) {
+            handleReady(sender);
+            return true;
+        }
+
         if (!sender.isOp()) {
             sender.sendMessage(MessageUtil.color("&cYou do not have permission to use this command."));
             return true;
@@ -92,7 +97,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleStart(CommandSender sender) {
-        if (plugin.getGameManager().isGameActive()) {
+        if (plugin.getGameManager().isGameActive() || plugin.getGameManager().isLobbyActive()) {
             sender.sendMessage(MessageUtil.color(plugin.getConfigManager().getMessage("already-in-game")));
             return;
         }
@@ -102,7 +107,27 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        plugin.getGameManager().startGame();
+        plugin.getGameManager().openLobby();
+    }
+
+    private void handleReady(CommandSender sender) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(MessageUtil.color("&cOnly players can ready up."));
+            return;
+        }
+
+        Player player = (Player) sender;
+        if (!plugin.getGameManager().isLobbyActive()) {
+            sender.sendMessage(MessageUtil.color(plugin.getConfigManager().getMessage("no-active-lobby")));
+            return;
+        }
+
+        if (!plugin.getRoleManager().isInGame(player)) {
+            sender.sendMessage(MessageUtil.color(plugin.getConfigManager().getMessage("not-assigned-role")));
+            return;
+        }
+
+        plugin.getGameManager().toggleReady(player);
     }
 
     private void handleStop(CommandSender sender) {
@@ -156,6 +181,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         }
 
         plugin.getRoleManager().addHunter(target);
+        plugin.getGameManager().clearReady(target);
         String message = plugin.getConfigManager().getMessage("player-added-hunter")
             .replace("{player}", target.getName());
         sender.sendMessage(MessageUtil.color(message));
@@ -169,6 +195,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         }
 
         plugin.getRoleManager().addRunner(target);
+        plugin.getGameManager().clearReady(target);
         String message = plugin.getConfigManager().getMessage("player-added-runner")
             .replace("{player}", target.getName());
         sender.sendMessage(MessageUtil.color(message));
@@ -182,6 +209,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         }
 
         plugin.getRoleManager().removePlayer(target);
+        plugin.getGameManager().clearReady(target);
         String message = plugin.getConfigManager().getMessage("player-removed")
             .replace("{player}", target.getName());
         sender.sendMessage(MessageUtil.color(message));
@@ -202,6 +230,8 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(MessageUtil.color("&8&m-------------------"));
         sender.sendMessage(MessageUtil.color("&6&lManhunt Status"));
         sender.sendMessage(MessageUtil.color("&7Game Active: " + (plugin.getGameManager().isGameActive() ? "&aYes" : "&cNo")));
+        sender.sendMessage(MessageUtil.color("&7Lobby Open: " + (plugin.getGameManager().isLobbyActive() ? "&aYes" : "&cNo")));
+        sender.sendMessage(MessageUtil.color("&7Ready Players: &e" + plugin.getGameManager().getReadyPlayers().size() + "&7/&e" + plugin.getGameManager().getParticipantCount()));
         sender.sendMessage(MessageUtil.color("&7Game Paused: " + (plugin.getGameManager().isGamePaused() ? "&eYes" : "&aNo")));
         sender.sendMessage(MessageUtil.color("&7Hunters (&c" + hunters.size() + "&7): " + hunterNames));
         sender.sendMessage(MessageUtil.color("&7Runners (&a" + runners.size() + "&7): " + runnerNames));
@@ -216,7 +246,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(MessageUtil.color("&7Alert Runner: " + (plugin.getConfigManager().isAlertRunner() ? "&aYes" : "&cNo")));
         sender.sendMessage(MessageUtil.color("&7Auto Give Compass: " + (plugin.getConfigManager().isAutoGiveCompass() ? "&aYes" : "&cNo")));
         sender.sendMessage(MessageUtil.color("&7Hunter Dragon Damage: " + (plugin.getConfigManager().isHunterCanDamageDragon() ? "&aEnabled" : "&cDisabled")));
-        sender.sendMessage(MessageUtil.color("&7Hunter Freeze Delay: &e" + plugin.getConfigManager().getHunterFreezeDelayDisplay()));
+        sender.sendMessage(MessageUtil.color("&7Runner Grace Period: &e" + plugin.getConfigManager().getRunnerGracePeriodSeconds() + " seconds"));
         sender.sendMessage(MessageUtil.color("&7Use &e/manhunt setup &7for GUI configuration"));
         sender.sendMessage(MessageUtil.color("&8&m-------------------"));
     }
@@ -224,7 +254,8 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(MessageUtil.color("&8&m-------------------"));
         sender.sendMessage(MessageUtil.color("&6&lManhunt Commands"));
-        sender.sendMessage(MessageUtil.color("&e/manhunt start &7- Start the game"));
+        sender.sendMessage(MessageUtil.color("&e/manhunt start &7- Open the pre-game lobby"));
+        sender.sendMessage(MessageUtil.color("&e/manhunt ready &7- Toggle your ready status"));
         sender.sendMessage(MessageUtil.color("&e/manhunt stop &7- Stop the game"));
         sender.sendMessage(MessageUtil.color("&e/manhunt restart &7- Restart the game"));
         sender.sendMessage(MessageUtil.color("&e/manhunt pause &7- Pause the game"));
@@ -245,7 +276,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            completions.addAll(Arrays.asList("start", "stop", "restart", "pause", "resume", "setup", "addhunter", "addrunner", "remove", "status", "configure"));
+            completions.addAll(Arrays.asList("start", "ready", "stop", "restart", "pause", "resume", "setup", "addhunter", "addrunner", "remove", "status", "configure"));
         } else if (args.length == 2 && (args[0].equalsIgnoreCase("addhunter") || args[0].equalsIgnoreCase("addrunner") || args[0].equalsIgnoreCase("remove"))) {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 completions.add(player.getName());

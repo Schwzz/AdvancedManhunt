@@ -14,7 +14,12 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @Getter
 public class GameManager {
@@ -24,6 +29,10 @@ public class GameManager {
     private boolean gamePaused;
     private boolean countdownActive;
     private boolean gameStarted;
+    private boolean lobbyActive;
+    private final Set<UUID> readyPlayers = new HashSet<>();
+    private final Map<UUID, Integer> remainingLives = new HashMap<>();
+    private final Set<UUID> eliminatedPlayers = new HashSet<>();
     
     public GameManager(ManhuntPlugin plugin) {
         this.plugin = plugin;
@@ -31,28 +40,84 @@ public class GameManager {
         this.gamePaused = false;
         this.countdownActive = false;
         this.gameStarted = false;
+        this.lobbyActive = false;
     }
     
-    public boolean startGame() {
-        if (gameActive) {
+    public boolean openLobby() {
+        if (gameActive || lobbyActive) {
             return false;
         }
         
         if (!plugin.getRoleManager().hasEnoughPlayers()) {
             return false;
         }
+
+        lobbyActive = true;
+        readyPlayers.clear();
+        MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("lobby-opened"));
+        return true;
+    }
+
+    public boolean toggleReady(Player player) {
+        if (!lobbyActive || !plugin.getRoleManager().isInGame(player)) {
+            return false;
+        }
+
+        UUID playerId = player.getUniqueId();
+        if (readyPlayers.remove(playerId)) {
+            MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("player-unready")
+                .replace("{player}", player.getName()));
+            return true;
+        }
+
+        readyPlayers.add(playerId);
+        MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("player-ready")
+            .replace("{player}", player.getName())
+            .replace("{ready}", String.valueOf(readyPlayers.size()))
+            .replace("{total}", String.valueOf(getParticipantCount())));
+
+        if (allPlayersReady()) {
+            beginGame();
+        }
+        return true;
+    }
+
+    public void clearReady(Player player) {
+        readyPlayers.remove(player.getUniqueId());
+    }
+
+    public boolean isReady(Player player) {
+        return readyPlayers.contains(player.getUniqueId());
+    }
+
+    public boolean allPlayersReady() {
+        return plugin.getRoleManager().hasEnoughPlayers()
+            && readyPlayers.containsAll(plugin.getRoleManager().getHunters())
+            && readyPlayers.containsAll(plugin.getRoleManager().getRunners());
+    }
+
+    public int getParticipantCount() {
+        return plugin.getRoleManager().getHunters().size() + plugin.getRoleManager().getRunners().size();
+    }
+
+    private void beginGame() {
+        if (!lobbyActive || !allPlayersReady()) {
+            return;
+        }
         
         gameActive = true;
         gamePaused = false;
         countdownActive = true;
         gameStarted = false;
+        lobbyActive = false;
+        readyPlayers.clear();
+        initializeLives();
         
         teleportAllToSpawn();
         freezeAllPlayers();
+        plugin.getBossBarManager().show();
         
         startCountdown();
-        
-        return true;
     }
     
     private void startCountdown() {
@@ -75,28 +140,17 @@ public class GameManager {
                     }
                     
                     unfreezeRunners();
-                    String freezeDelay = plugin.getConfigManager().getHunterFreezeDelay().toLowerCase();
-                    
-                    if ("none".equals(freezeDelay)) {
-                        unfreezeHunters();
-                        startGameImmediately();
-                    } else if ("5".equals(freezeDelay)) {
-                        new BukkitRunnable() {
-                            @Override
-                            public void run() {
-                                unfreezeHunters();
-                                startGameImmediately();
+                    long gracePeriodTicks = plugin.getConfigManager().getRunnerGracePeriodSeconds() * 20L;
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            if (!gameActive || gameStarted) {
+                                return;
                             }
-                        }.runTaskLater(plugin, 100L);
-                    } else if ("10".equals(freezeDelay)) {
-                        new BukkitRunnable() {
-                            @Override
-                            public void run() {
-                                unfreezeHunters();
-                                startGameImmediately();
-                            }
-                        }.runTaskLater(plugin, 200L);
-                    }
+                            unfreezeHunters();
+                            startGameImmediately();
+                        }
+                    }.runTaskLater(plugin, gracePeriodTicks);
                     
                     if (plugin.getConfigManager().isAutoGiveCompass()) {
                         giveCompassesToHunters();
@@ -117,19 +171,7 @@ public class GameManager {
     }
     
     public void onRunnerMove() {
-        if (!countdownActive || gameStarted) {
-            return;
-        }
-        
-        gameStarted = true;
-        countdownActive = false;
-        
-        for (Player hunter : plugin.getRoleManager().getOnlineHunters()) {
-            hunter.sendTitle(MessageUtil.color("&a&lRunners are now Running!"), "", 5, 40, 10);
-        }
-        
-        unfreezeHunters();
-        plugin.getGameTimer().start();
+        // Hunter release is controlled exclusively by the configured runner grace period.
     }
     
     public void restartGame() {
@@ -138,13 +180,13 @@ public class GameManager {
         new BukkitRunnable() {
             @Override
             public void run() {
-                startGame();
+                openLobby();
             }
         }.runTaskLater(plugin, 40L);
     }
     
     public void stopGame() {
-        if (!gameActive) {
+        if (!gameActive && !lobbyActive) {
             return;
         }
         
@@ -152,14 +194,19 @@ public class GameManager {
         gamePaused = false;
         countdownActive = false;
         gameStarted = false;
+        lobbyActive = false;
+        readyPlayers.clear();
         
         plugin.getTrackerManager().clearCooldowns();
         plugin.getFreezeManager().unfreezeAll();
         plugin.getGameTimer().reset();
         plugin.getReconnectManager().clear();
+        plugin.getBossBarManager().remove();
         
         removeAllCompasses();
         teleportAllToSpawn();
+        remainingLives.clear();
+        eliminatedPlayers.clear();
         
         if (plugin.getConfigManager().isAnnounceEnd()) {
             MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("game-stopped"));
@@ -185,30 +232,78 @@ public class GameManager {
     }
     
     public void handleRunnerDeath(Player runner) {
-        if (!gameActive || gamePaused) {
+        handlePlayerDeath(runner);
+    }
+
+    public void handleHunterDeath(Player hunter) {
+        handlePlayerDeath(hunter);
+    }
+
+    public void handlePlayerDeath(Player player) {
+        if (!gameActive || gamePaused || isEliminated(player)) {
             return;
         }
-        
-        plugin.getGameTimer().stop();
-        String timeSurvived = plugin.getGameTimer().getFormattedTime();
-        MessageUtil.broadcast(plugin, "&c" + runner.getName() + " &7was eliminated! &eTime Survived: &f" + timeSurvived);
-        plugin.getGameTimer().start();
-        
-        int remainingRunners = plugin.getRoleManager().getOnlineRunners().size() - 1;
-        
-        if (remainingRunners > 0) {
-            runner.setGameMode(GameMode.SPECTATOR);
-            MessageUtil.send(plugin, runner, "&7You are now spectating the game.");
-        } else {
-            plugin.getRoleManager().getRunners().remove(runner.getUniqueId());
+
+        UUID playerId = player.getUniqueId();
+        int lives = Math.max(0, remainingLives.getOrDefault(playerId, 1) - 1);
+        remainingLives.put(playerId, lives);
+
+        if (lives > 0) {
+            MessageUtil.broadcast(plugin, "&e" + player.getName() + " &7has &c" + lives + " &7life" + (lives == 1 ? "" : "s") + " remaining.");
+            return;
         }
-        
-        if (plugin.getRoleManager().getOnlineRunners().isEmpty() || 
-            (plugin.getRoleManager().getOnlineRunners().size() == 1 && 
-             plugin.getRoleManager().getOnlineRunners().get(0).getGameMode() == GameMode.SPECTATOR)) {
+
+        eliminatedPlayers.add(playerId);
+        MessageUtil.broadcast(plugin, "&c" + player.getName() + " &7has been eliminated!");
+        if (plugin.getRoleManager().isRunner(player) && allRunnersEliminated()) {
             announceHunterWin();
             stopGame();
         }
+    }
+
+    public void handlePlayerRespawn(Player player) {
+        if (!gameActive || !plugin.getRoleManager().isInGame(player)) {
+            return;
+        }
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!gameActive || !player.isOnline()) {
+                    return;
+                }
+                player.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
+                player.setGameMode(isEliminated(player) ? GameMode.SPECTATOR : GameMode.SURVIVAL);
+            }
+        }.runTask(plugin);
+    }
+
+    public int getRemainingLives(Player player) {
+        return remainingLives.getOrDefault(player.getUniqueId(), 0);
+    }
+
+    public boolean isEliminated(Player player) {
+        return eliminatedPlayers.contains(player.getUniqueId());
+    }
+
+    private void initializeLives() {
+        remainingLives.clear();
+        eliminatedPlayers.clear();
+        for (UUID playerId : plugin.getRoleManager().getHunters()) {
+            remainingLives.put(playerId, plugin.getConfigManager().getHunterLives());
+        }
+        for (UUID playerId : plugin.getRoleManager().getRunners()) {
+            remainingLives.put(playerId, plugin.getConfigManager().getRunnerLives());
+        }
+    }
+
+    private boolean allRunnersEliminated() {
+        for (UUID runnerId : plugin.getRoleManager().getRunners()) {
+            if (!eliminatedPlayers.contains(runnerId)) {
+                return false;
+            }
+        }
+        return true;
     }
     
     public void handleDragonDeath(Player killer) {

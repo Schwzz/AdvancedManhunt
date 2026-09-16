@@ -2,6 +2,7 @@ package com.manhunt;
 
 import com.manhunt.command.ManhuntCommand;
 import com.manhunt.command.TeamChatCommand;
+import com.manhunt.bossbar.BossBarManager;
 import com.manhunt.config.ConfigManager;
 import com.manhunt.freeze.FreezeManager;
 import com.manhunt.game.GameManager;
@@ -14,6 +15,7 @@ import com.manhunt.listener.PlayerDeathListener;
 import com.manhunt.listener.PlayerJoinListener;
 import com.manhunt.listener.PlayerMoveListener;
 import com.manhunt.listener.PlayerQuitListener;
+import com.manhunt.listener.PlayerRespawnListener;
 import com.manhunt.reconnect.ReconnectManager;
 import com.manhunt.role.RoleManager;
 import com.manhunt.timer.GameTimer;
@@ -33,6 +35,7 @@ public class ManhuntPlugin extends JavaPlugin {
     private GameTimer gameTimer;
     private GUIManager guiManager;
     private ReconnectManager reconnectManager;
+    private BossBarManager bossBarManager;
     
     @Override
     public void onEnable() {
@@ -45,6 +48,7 @@ public class ManhuntPlugin extends JavaPlugin {
         this.gameTimer = new GameTimer();
         this.guiManager = new GUIManager();
         this.reconnectManager = new ReconnectManager();
+        this.bossBarManager = new BossBarManager(this);
         this.gameManager = new GameManager(this);
         
         getCommand("manhunt").setExecutor(new ManhuntCommand(this));
@@ -58,6 +62,7 @@ public class ManhuntPlugin extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new PlayerMoveListener(this), this);
         Bukkit.getPluginManager().registerEvents(new EntityDamageListener(this), this);
         Bukkit.getPluginManager().registerEvents(new PlayerQuitListener(this), this);
+        Bukkit.getPluginManager().registerEvents(new PlayerRespawnListener(this), this);
         Bukkit.getPluginManager().registerEvents(new GUIListener(guiManager), this);
         
         getLogger().info("ManhuntPlugin enabled!");

@@ -81,8 +81,8 @@ public class SetupGUI extends InventoryGUI {
             .consumer(event -> {
                 Player clicker = (Player) event.getWhoClicked();
                 cycleHunterFreezeDelay();
-                String delay = plugin.getConfigManager().getHunterFreezeDelayDisplay();
-                MessageUtil.send(plugin, clicker, "&aHunter freeze delay set to &e" + delay);
+                int gracePeriod = plugin.getConfig().getInt("game.runner-grace-period-seconds", 5);
+                MessageUtil.send(plugin, clicker, "&aRunner grace period set to &e" + gracePeriod + " seconds");
                 XSound.matchXSound("UI_BUTTON_CLICK").ifPresent(sound -> sound.play(clicker));
                 decorate(clicker);
             })
@@ -162,34 +162,19 @@ public class SetupGUI extends InventoryGUI {
     }
     
     private ItemStack createHunterFreezeDelayItem() {
-        String delay = plugin.getConfig().getString("game.hunter-freeze-delay", "wait-for-move");
+        int gracePeriod = plugin.getConfig().getInt("game.runner-grace-period-seconds", 5);
         ItemStack item = XMaterial.matchXMaterial("ICE").map(XMaterial::parseItem).orElse(new ItemStack(XMaterial.ICE.parseMaterial()));
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(MessageUtil.color("&6Hunter Freeze Delay"));
-            String displayText;
-            switch (delay.toLowerCase()) {
-                case "none":
-                    displayText = "None";
-                    break;
-                case "5":
-                    displayText = "5 seconds";
-                    break;
-                case "10":
-                    displayText = "10 seconds";
-                    break;
-                default:
-                    displayText = "Wait for Move";
-                    break;
-            }
+            meta.setDisplayName(MessageUtil.color("&6Runner Grace Period"));
             meta.setLore(Arrays.asList(
-                MessageUtil.color("&7Current: &e" + displayText),
+                MessageUtil.color("&7Current: &e" + gracePeriod + " seconds"),
                 MessageUtil.color(""),
-                MessageUtil.color("&7Determines when Hunters"),
-                MessageUtil.color("&7are released after start"),
+                MessageUtil.color("&7How long Hunters remain frozen"),
+                MessageUtil.color("&7after Runners are released"),
                 MessageUtil.color(""),
                 MessageUtil.color("&7Click to cycle:"),
-                MessageUtil.color("&eNone &7→ &eWait for Move &7→ &e5s &7→ &e10s")
+                MessageUtil.color("&e0s &7→ &e5s &7→ &e10s &7→ &e20s")
             ));
             item.setItemMeta(meta);
         }
@@ -254,23 +239,23 @@ public class SetupGUI extends InventoryGUI {
     }
     
     private void cycleHunterFreezeDelay() {
-        String current = plugin.getConfig().getString("game.hunter-freeze-delay", "wait-for-move").toLowerCase();
-        String next;
+        int current = plugin.getConfig().getInt("game.runner-grace-period-seconds", 5);
+        int next;
         switch (current) {
-            case "none":
-                next = "wait-for-move";
+            case 0:
+                next = 5;
                 break;
-            case "wait-for-move":
-                next = "5";
+            case 5:
+                next = 10;
                 break;
-            case "5":
-                next = "10";
+            case 10:
+                next = 20;
                 break;
             default:
-                next = "none";
+                next = 0;
                 break;
         }
-        plugin.getConfig().set("game.hunter-freeze-delay", next);
+        plugin.getConfig().set("game.runner-grace-period-seconds", next);
         plugin.saveConfig();
     }
 }

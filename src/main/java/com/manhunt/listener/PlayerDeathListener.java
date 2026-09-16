@@ -24,6 +24,8 @@ public class PlayerDeathListener implements Listener {
         
         if (plugin.getRoleManager().isRunner(player)) {
             plugin.getGameManager().handleRunnerDeath(player);
+        } else if (plugin.getRoleManager().isHunter(player)) {
+            plugin.getGameManager().handleHunterDeath(player);
         }
     }
 }

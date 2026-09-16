@@ -78,19 +78,14 @@ public class TrackerManager {
     }
     
     public void trackRunner(Player hunter, Player runner) {
-        Location targetLocation;
-        boolean differentDimension = false;
-        
-        if (!hunter.getWorld().equals(runner.getWorld())) {
-            differentDimension = true;
-            Location portalLoc = getLastPortalLocation(runner);
-            if (portalLoc != null && portalLoc.getWorld().equals(hunter.getWorld())) {
-                targetLocation = portalLoc;
-            } else {
-                targetLocation = runner.getLocation();
-            }
-        } else {
-            targetLocation = runner.getLocation();
+        boolean differentDimension = !hunter.getWorld().equals(runner.getWorld());
+        Location targetLocation = getTrackLocation(hunter, runner);
+
+        if (targetLocation == null) {
+            String message = plugin.getConfigManager().getMessage("dimension-no-portal")
+                .replace("{dimension}", getDimensionName(runner.getWorld().getEnvironment()));
+            MessageUtil.send(hunter, message);
+            return;
         }
         
         hunter.setCompassTarget(targetLocation);
@@ -146,15 +141,10 @@ public class TrackerManager {
                 }
                 
                 if (ticks % 10 == 0) {
-                    Location targetLoc;
-                    if (!hunter.getWorld().equals(finalRunner.getWorld())) {
-                        Location portalLoc = getLastPortalLocation(finalRunner);
-                        targetLoc = (portalLoc != null && portalLoc.getWorld().equals(hunter.getWorld())) 
-                            ? portalLoc : finalRunner.getLocation();
-                    } else {
-                        targetLoc = finalRunner.getLocation();
+                    Location targetLoc = getTrackLocation(hunter, finalRunner);
+                    if (targetLoc != null) {
+                        hunter.setCompassTarget(targetLoc);
                     }
-                    hunter.setCompassTarget(targetLoc);
                 }
                 
                 ticks++;
@@ -163,6 +153,18 @@ public class TrackerManager {
         
         trackingTask.runTaskTimer(plugin, 0L, 1L);
         activeTrackingTasks.put(hunter.getUniqueId(), trackingTask);
+    }
+
+    private Location getTrackLocation(Player hunter, Player runner) {
+        if (hunter.getWorld().equals(runner.getWorld())) {
+            return runner.getLocation();
+        }
+
+        Location portalLocation = getLastPortalLocation(runner);
+        if (portalLocation != null && portalLocation.getWorld().equals(hunter.getWorld())) {
+            return portalLocation;
+        }
+        return null;
     }
     
     private void alertRunner(Player runner) {

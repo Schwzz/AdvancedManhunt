@@ -12,12 +12,19 @@ game:
   announce-end: true
   freeze-on-end: true
   hunter-can-damage-dragon: false
-  hunter-freeze-delay: "wait-for-move"
+  runner-grace-period-seconds: 5
+  hunter-lives: 3
+  runner-lives: 3
   
 messages:
   prefix: "&8[&6Manhunt&8] &7"
   game-started: "&aGame started! &7Hunters: &e{hunters} &7| Runners: &e{runners}"
   game-stopped: "&cGame stopped by GameMaster"
+  lobby-opened: "&6&lManhunt lobby opened! &7Assigned players, use &e/manhunt ready &7when you are ready."
+  player-ready: "&a{player} &7is ready! &e({ready}/{total})"
+  player-unready: "&e{player} &7is no longer ready."
+  no-active-lobby: "&cThere is no open manhunt lobby."
+  not-assigned-role: "&cYou must be assigned as a hunter or runner first."
   game-paused: "&eGame paused"
   game-resumed: "&aGame resumed"
   runner-win: "&a&lRUNNER WINS! &7The Ender Dragon has been slain!"
@@ -29,6 +36,7 @@ messages:
   already-in-game: "&cGame already in progress"
   not-enough-players: "&cNeed at least 1 hunter and 1 runner"
   dimension-tracking: "&7Runner is in &e{dimension}&7, pointing to last portal"
+  dimension-no-portal: "&7Runner is in &e{dimension}&7. No portal route has been recorded in this dimension."
   
 sounds:
   tracking: "BLOCK_NOTE_BLOCK_PLING"
