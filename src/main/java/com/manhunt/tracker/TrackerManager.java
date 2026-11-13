@@ -20,6 +20,7 @@ public class TrackerManager {
     private final Map<UUID, Location> lastPortalLocations = new HashMap<>();
     private final Map<UUID, Player> currentTrackedRunner = new HashMap<>();
     private final Map<UUID, BukkitRunnable> activeTrackingTasks = new HashMap<>();
+    private long pausedAt;
     
     public TrackerManager(ManhuntPlugin plugin) {
         this.plugin = plugin;
@@ -51,6 +52,7 @@ public class TrackerManager {
     }
     
     public void clearCooldowns() {
+        pausedAt = 0;
         cooldowns.clear();
         lastPortalLocations.clear();
         currentTrackedRunner.clear();
@@ -59,6 +61,17 @@ public class TrackerManager {
             task.cancel();
         }
         activeTrackingTasks.clear();
+    }
+
+    public void pause() {
+        pausedAt = System.currentTimeMillis();
+    }
+
+    public void resume() {
+        if (pausedAt == 0) return;
+        long duration = System.currentTimeMillis() - pausedAt;
+        cooldowns.replaceAll((id, timestamp) -> timestamp + duration);
+        pausedAt = 0;
     }
     
     public void updatePortalLocation(Player runner, Location location) {
@@ -133,6 +146,7 @@ public class TrackerManager {
                     activeTrackingTasks.remove(hunter.getUniqueId());
                     return;
                 }
+                if (plugin.getGameManager().isGamePaused()) return;
                 
                 if (ticks >= maxTicks) {
                     cancel();

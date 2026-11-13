@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class ManhuntCommand implements CommandExecutor, TabCompleter {
@@ -28,6 +29,10 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length > 0 && args[0].equalsIgnoreCase("ready")) {
             handleReady(sender);
+            return true;
+        }
+        if (args.length > 0 && args[0].equalsIgnoreCase("status")) {
+            handleStatus(sender);
             return true;
         }
 
@@ -59,6 +64,15 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
                 break;
             case "setup":
                 handleSetup(sender);
+                break;
+            case "setspawn":
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage(MessageUtil.color("&cOnly players can set the spawn."));
+                } else {
+                    plugin.getConfig().set("game.spawn", ((Player) sender).getLocation());
+                    plugin.saveConfig();
+                    sender.sendMessage(MessageUtil.color("&aManhunt spawn saved."));
+                }
                 break;
             case "addhunter":
                 if (args.length < 2) {
@@ -131,7 +145,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleStop(CommandSender sender) {
-        if (!plugin.getGameManager().isGameActive()) {
+        if (!plugin.getGameManager().isGameActive() && !plugin.getGameManager().isLobbyActive()) {
             sender.sendMessage(MessageUtil.color(plugin.getConfigManager().getMessage("no-active-game")));
             return;
         }
@@ -235,7 +249,21 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(MessageUtil.color("&7Game Paused: " + (plugin.getGameManager().isGamePaused() ? "&eYes" : "&aNo")));
         sender.sendMessage(MessageUtil.color("&7Hunters (&c" + hunters.size() + "&7): " + hunterNames));
         sender.sendMessage(MessageUtil.color("&7Runners (&a" + runners.size() + "&7): " + runnerNames));
+        if (plugin.getGameManager().isLobbyActive()) {
+            for (UUID id : plugin.getRoleManager().getHunters()) sendReadiness(sender, id, "&cHunter");
+            for (UUID id : plugin.getRoleManager().getRunners()) sendReadiness(sender, id, "&aRunner");
+            sender.sendMessage(MessageUtil.color("&7Lives: &c" + plugin.getConfigManager().getHunterLives() + " hunter &7/ &a" + plugin.getConfigManager().getRunnerLives() + " runner"));
+            sender.sendMessage(MessageUtil.color("&7Grace: &e" + plugin.getConfigManager().getRunnerGracePeriodSeconds() + "s &7| Tracker: &e" + plugin.getConfigManager().getTrackerCooldown() + "s cooldown, " + plugin.getConfigManager().getTrackerDuration() + "s duration"));
+            sender.sendMessage(MessageUtil.color("&7Runner alert: &e" + plugin.getConfigManager().isAlertRunner() + " &7| Hunter dragon damage: &e" + plugin.getConfigManager().isHunterCanDamageDragon()));
+        }
         sender.sendMessage(MessageUtil.color("&8&m-------------------"));
+    }
+
+    private void sendReadiness(CommandSender sender, UUID id, String role) {
+        Player player = Bukkit.getPlayer(id);
+        String name = Bukkit.getOfflinePlayer(id).getName();
+        sender.sendMessage(MessageUtil.color(role + " &f" + (name == null ? id.toString() : name)
+            + (player == null ? " &cOffline" : plugin.getGameManager().isReady(player) ? " &aReady" : " &eWaiting")));
     }
 
     private void handleConfigure(CommandSender sender) {
@@ -261,6 +289,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(MessageUtil.color("&e/manhunt pause &7- Pause the game"));
         sender.sendMessage(MessageUtil.color("&e/manhunt resume &7- Resume the game"));
         sender.sendMessage(MessageUtil.color("&e/manhunt setup &7- Open setup GUI"));
+        sender.sendMessage(MessageUtil.color("&e/manhunt setspawn &7- Set the match spawn"));
         sender.sendMessage(MessageUtil.color("&e/manhunt addhunter <player> &7- Add hunter"));
         sender.sendMessage(MessageUtil.color("&e/manhunt addrunner <player> &7- Add runner"));
         sender.sendMessage(MessageUtil.color("&e/manhunt remove <player> &7- Remove player"));
@@ -276,7 +305,7 @@ public class ManhuntCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            completions.addAll(Arrays.asList("start", "ready", "stop", "restart", "pause", "resume", "setup", "addhunter", "addrunner", "remove", "status", "configure"));
+            completions.addAll(Arrays.asList("start", "ready", "stop", "restart", "pause", "resume", "setup", "setspawn", "addhunter", "addrunner", "remove", "status", "configure"));
         } else if (args.length == 2 && (args[0].equalsIgnoreCase("addhunter") || args[0].equalsIgnoreCase("addrunner") || args[0].equalsIgnoreCase("remove"))) {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 completions.add(player.getName());

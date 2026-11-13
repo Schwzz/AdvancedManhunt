@@ -10,9 +10,6 @@ public class ConfigManager {
     private final ManhuntPlugin plugin;
     private final FileConfiguration config;
     
-    private final int trackerCooldown;
-    private final int trackerDuration;
-    private final boolean alertRunner;
     private final String runnerAlertMessage;
     private final String cooldownMessage;
     private final String trackingMessage;
@@ -21,15 +18,11 @@ public class ConfigManager {
     private final boolean announceEnd;
     private final boolean freezeOnEnd;
     private final String prefix;
-    private final boolean hunterCanDamageDragon;
     
     public ConfigManager(ManhuntPlugin plugin) {
         this.plugin = plugin;
         this.config = plugin.getConfig();
         
-        this.trackerCooldown = config.getInt("tracker.cooldown-seconds", 7);
-        this.trackerDuration = config.getInt("tracker.duration-seconds", 0);
-        this.alertRunner = config.getBoolean("tracker.alert-runner", true);
         this.runnerAlertMessage = config.getString("tracker.runner-alert-message", "&c&lTRACKED");
         this.cooldownMessage = config.getString("tracker.cooldown-message", "&cTracker recharging...");
         this.trackingMessage = config.getString("tracker.tracking-message", "&aTracking...");
@@ -37,12 +30,27 @@ public class ConfigManager {
         this.announceStart = config.getBoolean("game.announce-start", true);
         this.announceEnd = config.getBoolean("game.announce-end", true);
         this.freezeOnEnd = config.getBoolean("game.freeze-on-end", true);
-        this.hunterCanDamageDragon = config.getBoolean("game.hunter-can-damage-dragon", false);
         this.prefix = config.getString("messages.prefix", "&8[&6Manhunt&8] &7");
     }
     
     public String getMessage(String path) {
         return config.getString("messages." + path, "");
+    }
+
+    public int getTrackerCooldown() {
+        return config.getInt("tracker.cooldown-seconds", 7);
+    }
+
+    public int getTrackerDuration() {
+        return config.getInt("tracker.duration-seconds", 0);
+    }
+
+    public boolean isAlertRunner() {
+        return config.getBoolean("tracker.alert-runner", true);
+    }
+
+    public boolean isHunterCanDamageDragon() {
+        return config.getBoolean("game.hunter-can-damage-dragon", false);
     }
     
     public String getSound(String path) {

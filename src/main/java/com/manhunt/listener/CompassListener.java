@@ -26,7 +26,7 @@ public class CompassListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
         
-        if (item == null || XMaterial.matchXMaterial(item.getType()) != XMaterial.COMPASS) {
+        if (!plugin.getGameManager().isTrackerCompass(item)) {
             return;
         }
         

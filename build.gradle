@@ -7,16 +7,21 @@ version = '1.0.0'
 sourceCompatibility = '8'
 targetCompatibility = '8'
 
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+}
+
 repositories {
     mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
     maven { url = 'https://oss.sonatype.org/content/groups/public/' }
 }
 
 dependencies {
-    compileOnly 'org.spigotmc:spigot-api:1.20.1-R0.1-SNAPSHOT'
-    compileOnly 'org.projectlombok:lombok:1.18.30'
-    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    compileOnly 'io.papermc.paper:paper-api:26.3.build.218-stable'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
 }
 
 tasks.withType(JavaCompile) {

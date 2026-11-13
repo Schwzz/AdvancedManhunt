@@ -8,12 +8,15 @@ import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,6 +36,12 @@ public class GameManager {
     private final Set<UUID> readyPlayers = new HashSet<>();
     private final Map<UUID, Integer> remainingLives = new HashMap<>();
     private final Set<UUID> eliminatedPlayers = new HashSet<>();
+    private final Set<UUID> pauseFrozenPlayers = new HashSet<>();
+    private BukkitRunnable countdownTask;
+    private BukkitRunnable graceTask;
+    private final List<String> matchMoments = new ArrayList<>();
+    private final List<String> matchEliminations = new ArrayList<>();
+    private String matchWinner;
     
     public GameManager(ManhuntPlugin plugin) {
         this.plugin = plugin;
@@ -55,6 +64,7 @@ public class GameManager {
         lobbyActive = true;
         readyPlayers.clear();
         MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("lobby-opened"));
+        MessageUtil.broadcast(plugin, "&7Use &e/manhunt status &7to see readiness and match settings.");
         return true;
     }
 
@@ -112,6 +122,9 @@ public class GameManager {
         lobbyActive = false;
         readyPlayers.clear();
         initializeLives();
+        matchMoments.clear();
+        matchEliminations.clear();
+        matchWinner = null;
         
         teleportAllToSpawn();
         freezeAllPlayers();
@@ -121,11 +134,12 @@ public class GameManager {
     }
     
     private void startCountdown() {
-        new BukkitRunnable() {
+        countdownTask = new BukkitRunnable() {
             int count = 4;
             
             @Override
             public void run() {
+                if (gamePaused) return;
                 if (count > 1) {
                     String displayText = count == 4 ? "&e&lGame Starting" : "&e&l" + (count - 1);
                     for (Player p : Bukkit.getOnlinePlayers()) {
@@ -140,17 +154,19 @@ public class GameManager {
                     }
                     
                     unfreezeRunners();
-                    long gracePeriodTicks = plugin.getConfigManager().getRunnerGracePeriodSeconds() * 20L;
-                    new BukkitRunnable() {
+                    graceTask = new BukkitRunnable() {
+                        int remaining = plugin.getConfigManager().getRunnerGracePeriodSeconds();
                         @Override
                         public void run() {
-                            if (!gameActive || gameStarted) {
-                                return;
-                            }
+                            if (gamePaused) return;
+                            if (remaining-- > 0) return;
                             unfreezeHunters();
                             startGameImmediately();
+                            cancel();
+                            graceTask = null;
                         }
-                    }.runTaskLater(plugin, gracePeriodTicks);
+                    };
+                    graceTask.runTaskTimer(plugin, 0L, 20L);
                     
                     if (plugin.getConfigManager().isAutoGiveCompass()) {
                         giveCompassesToHunters();
@@ -159,9 +175,11 @@ public class GameManager {
                     count--;
                 } else {
                     cancel();
+                    countdownTask = null;
                 }
             }
-        }.runTaskTimer(plugin, 0L, 20L);
+        };
+        countdownTask.runTaskTimer(plugin, 0L, 20L);
     }
     
     private void startGameImmediately() {
@@ -189,6 +207,15 @@ public class GameManager {
         if (!gameActive && !lobbyActive) {
             return;
         }
+        if (gameActive) {
+            plugin.getGameTimer().stop();
+            MessageUtil.broadcast(plugin, "&6&l--- Match Summary ---");
+            MessageUtil.broadcast(plugin, "&7Winner: &f" + (matchWinner == null ? "None (match stopped)" : matchWinner));
+            MessageUtil.broadcast(plugin, "&7Duration: &f" + plugin.getGameTimer().getFormattedTime());
+            MessageUtil.broadcast(plugin, "&7Eliminations: &f" + (matchEliminations.isEmpty() ? "None" : String.join(", ", matchEliminations)));
+            if (matchMoments.isEmpty()) MessageUtil.broadcast(plugin, "&7Major moments: &fNone");
+            else for (String moment : matchMoments) MessageUtil.broadcast(plugin, "&7" + moment);
+        }
         
         gameActive = false;
         gamePaused = false;
@@ -196,6 +223,9 @@ public class GameManager {
         gameStarted = false;
         lobbyActive = false;
         readyPlayers.clear();
+        if (countdownTask != null) { countdownTask.cancel(); countdownTask = null; }
+        if (graceTask != null) { graceTask.cancel(); graceTask = null; }
+        pauseFrozenPlayers.clear();
         
         plugin.getTrackerManager().clearCooldowns();
         plugin.getFreezeManager().unfreezeAll();
@@ -219,6 +249,15 @@ public class GameManager {
         }
         
         gamePaused = true;
+        plugin.getGameTimer().stop();
+        plugin.getTrackerManager().pause();
+        pauseFrozenPlayers.clear();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (plugin.getRoleManager().isInGame(player) && !plugin.getFreezeManager().isFrozen(player)) {
+                plugin.getFreezeManager().freezePlayer(player);
+                pauseFrozenPlayers.add(player.getUniqueId());
+            }
+        }
         MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("game-paused"));
     }
     
@@ -228,6 +267,13 @@ public class GameManager {
         }
         
         gamePaused = false;
+        if (gameStarted) plugin.getGameTimer().resume();
+        plugin.getTrackerManager().resume();
+        for (UUID id : pauseFrozenPlayers) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null) plugin.getFreezeManager().unfreezePlayer(player);
+        }
+        pauseFrozenPlayers.clear();
         MessageUtil.broadcast(plugin, plugin.getConfigManager().getMessage("game-resumed"));
     }
     
@@ -249,13 +295,17 @@ public class GameManager {
         remainingLives.put(playerId, lives);
 
         if (lives > 0) {
+            matchMoments.add("[" + plugin.getGameTimer().getFormattedTime() + "] " + player.getName() + " lost a life (" + lives + " remaining).");
             MessageUtil.broadcast(plugin, "&e" + player.getName() + " &7has &c" + lives + " &7life" + (lives == 1 ? "" : "s") + " remaining.");
             return;
         }
 
         eliminatedPlayers.add(playerId);
+        matchEliminations.add(player.getName());
+        matchMoments.add("[" + plugin.getGameTimer().getFormattedTime() + "] " + player.getName() + " was eliminated.");
         MessageUtil.broadcast(plugin, "&c" + player.getName() + " &7has been eliminated!");
         if (plugin.getRoleManager().isRunner(player) && allRunnersEliminated()) {
+            matchWinner = "Hunters";
             announceHunterWin();
             stopGame();
         }
@@ -272,7 +322,7 @@ public class GameManager {
                 if (!gameActive || !player.isOnline()) {
                     return;
                 }
-                player.teleport(Bukkit.getWorlds().get(0).getSpawnLocation());
+                player.teleport(getSpawn());
                 player.setGameMode(isEliminated(player) ? GameMode.SPECTATOR : GameMode.SURVIVAL);
             }
         }.runTask(plugin);
@@ -312,6 +362,8 @@ public class GameManager {
         }
         
         if (killer != null && plugin.getRoleManager().isHunter(killer)) {
+            matchWinner = "Runners";
+            matchMoments.add("[" + plugin.getGameTimer().getFormattedTime() + "] Hunter " + killer.getName() + " killed the dragon.");
             MessageUtil.broadcast(plugin, "&c&lHUNTER KILLED THE DRAGON!");
             MessageUtil.broadcast(plugin, "&a&lRUNNERS WIN! &7Hunters broke the rules!");
             MessageUtil.playSound(plugin, plugin.getConfigManager().getSound("game-end"));
@@ -320,6 +372,8 @@ public class GameManager {
         }
         
         plugin.getGameTimer().stop();
+        matchWinner = "Runners";
+        matchMoments.add("[" + plugin.getGameTimer().getFormattedTime() + "] The Ender Dragon was defeated" + (killer == null ? "." : " by " + killer.getName() + "."));
         String ttkd = plugin.getGameTimer().getFormattedTime();
         
         announceRunnerWin(ttkd);
@@ -340,9 +394,11 @@ public class GameManager {
     }
     
     private void giveCompassesToHunters() {
-        ItemStack compass = XMaterial.matchXMaterial("COMPASS").map(XMaterial::parseItem).orElse(new ItemStack(XMaterial.COMPASS.parseMaterial()));
+        ItemStack compass = XMaterial.matchXMaterial("COMPASS").map(XMaterial::parseItem).orElse(null);
+        if (compass == null) return;
         ItemMeta meta = compass.getItemMeta();
         if (meta != null) {
+            meta.getPersistentDataContainer().set(new NamespacedKey(plugin, "tracker"), PersistentDataType.BYTE, (byte) 1);
             meta.setDisplayName(MessageUtil.color("&6Tracker Compass"));
             meta.setLore(Arrays.asList(
                 MessageUtil.color("&7Right-click to track runners"),
@@ -359,12 +415,20 @@ public class GameManager {
     
     private void removeAllCompasses() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            player.getInventory().remove(XMaterial.COMPASS.parseMaterial());
+            ItemStack[] contents = player.getInventory().getContents();
+            for (int i = 0; i < contents.length; i++) {
+                if (isTrackerCompass(contents[i])) player.getInventory().setItem(i, null);
+            }
         }
+    }
+
+    public boolean isTrackerCompass(ItemStack item) {
+        return item != null && item.hasItemMeta()
+            && item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, "tracker"), PersistentDataType.BYTE);
     }
     
     private void teleportAllToSpawn() {
-        Location spawn = Bukkit.getWorlds().get(0).getSpawnLocation();
+        Location spawn = getSpawn();
         List<Player> runners = plugin.getRoleManager().getOnlineRunners();
         List<Player> hunters = plugin.getRoleManager().getOnlineHunters();
         
@@ -394,6 +458,11 @@ public class GameManager {
                 }
             }
         }
+    }
+
+    private Location getSpawn() {
+        Location spawn = plugin.getConfig().getLocation("game.spawn");
+        return spawn != null && spawn.getWorld() != null ? spawn : Bukkit.getWorlds().get(0).getSpawnLocation();
     }
     
     private void freezeAllPlayers() {

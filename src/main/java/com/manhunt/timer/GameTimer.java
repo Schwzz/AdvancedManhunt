@@ -7,18 +7,29 @@ public class GameTimer {
     
     private long startTime;
     private boolean running;
+    private long elapsedMillis;
     
     public void start() {
         this.startTime = System.currentTimeMillis();
+        this.elapsedMillis = 0;
         this.running = true;
     }
     
     public void stop() {
+        if (running) elapsedMillis += System.currentTimeMillis() - startTime;
         this.running = false;
+    }
+
+    public void resume() {
+        if (!running && startTime != 0) {
+            startTime = System.currentTimeMillis();
+            running = true;
+        }
     }
     
     public void reset() {
         this.startTime = 0;
+        this.elapsedMillis = 0;
         this.running = false;
     }
     
@@ -27,7 +38,7 @@ public class GameTimer {
             return "00:00:00:00";
         }
         
-        long elapsed = System.currentTimeMillis() - startTime;
+        long elapsed = elapsedMillis + (running ? System.currentTimeMillis() - startTime : 0);
         long hours = elapsed / 3600000;
         long minutes = (elapsed % 3600000) / 60000;
         long seconds = (elapsed % 60000) / 1000;
